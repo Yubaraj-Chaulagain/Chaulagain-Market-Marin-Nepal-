@@ -96,3 +96,12 @@ The Android wrapper provides WebView, JavaScript, local browser storage, interne
 - Login includes **Forgot password?**. The user enters their username and registered email, receives a 6-digit OTP by Gmail, then confirms the OTP and sets a new password.
 - Password reset requires the updated `apps-script/Code.gs` to be redeployed as a Web App and MailApp permission to be authorized. After changing Code.gs, deploy a **new version** of the Web App and update the app's Web App URL if it changed.
 - This is still a prototype: the current app stores passwords as plain text in the starter database and performs local demo login. Do not use it for real customer accounts or financial data until authentication is moved fully server-side, passwords are hashed, sessions/roles are enforced on every API call, and the backend is security-reviewed.
+
+
+## Premium UI Theme
+Applied a premium navy-blue and gold theme across the web app and Android WebView:
+- Premium gradient header and dark navigation
+- Soft glass-style cards and subtle shadows
+- Gold primary buttons and polished form controls
+- Refined tables, responsive mobile navigation, and background gradients
+- Existing application logic and data fields are preserved
