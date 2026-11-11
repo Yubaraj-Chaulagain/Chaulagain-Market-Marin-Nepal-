@@ -78,3 +78,21 @@ This project includes a native Android WebView wrapper in the `android/` folder.
 If you publish a GitHub Release manually, the workflow also builds the APK and attaches it to that release. This workflow produces a debug-signed testing APK, not a Play Store production-signed build. A Play Store release requires your own signing keystore and protected GitHub Actions secrets.
 
 The Android wrapper provides WebView, JavaScript, local browser storage, internet access, external HTTPS link handling, and Android back navigation. This does not make the backend or payment gateways production-secure; configure and test the Apps Script deployment and access controls before using real customer financial data.
+
+
+## Customer selection and record management update
+
+- Customer dropdowns are populated from registered Customers for rooms, rent bills, orders, payments, savings, withdrawals, loans and repayments.
+- Data tables now include Edit / Update and Delete actions.
+- Product list also has an administration table with edit/delete controls.
+- Changes are saved locally and queued to Google Apps Script using upsert/delete.
+- Customer dropdowns will be empty until at least one customer is added.
+
+
+## Customer selection, record management, and password reset update
+
+- List views now include **Edit / Update** and **Delete** actions. Edits are queued for Google Sheets upsert; deletes are queued for the Apps Script delete endpoint.
+- Room tenants, rent bills, orders, payments, savings, withdrawals, loans, and loan repayments use customer dropdowns where applicable. Create customers first.
+- Login includes **Forgot password?**. The user enters their username and registered email, receives a 6-digit OTP by Gmail, then confirms the OTP and sets a new password.
+- Password reset requires the updated `apps-script/Code.gs` to be redeployed as a Web App and MailApp permission to be authorized. After changing Code.gs, deploy a **new version** of the Web App and update the app's Web App URL if it changed.
+- This is still a prototype: the current app stores passwords as plain text in the starter database and performs local demo login. Do not use it for real customer accounts or financial data until authentication is moved fully server-side, passwords are hashed, sessions/roles are enforced on every API call, and the backend is security-reviewed.
