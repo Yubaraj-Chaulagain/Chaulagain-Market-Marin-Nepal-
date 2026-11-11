@@ -105,3 +105,46 @@ Applied a premium navy-blue and gold theme across the web app and Android WebVie
 - Gold primary buttons and polished form controls
 - Refined tables, responsive mobile navigation, and background gradients
 - Existing application logic and data fields are preserved
+
+
+## Android launcher icon
+The approved Home & Market Manager Nepal artwork (including the creator credit) is installed as the Android launcher icon.
+- Legacy launcher icons: `android/app/src/main/res/mipmap-*`
+- Adaptive launcher icon: `android/app/src/main/res/mipmap-anydpi-v26/`
+- Manifest uses `@mipmap/ic_launcher` and `@mipmap/ic_launcher_round`.
+- Original full-resolution artwork: `branding/Home-Market-Manager-Nepal-Icon-Original.png`
+
+
+## Apps Script endpoint moved out of the app Settings screen
+- The Settings screen no longer displays a Deployment URL input or Save URL button.
+- The endpoint is configured in source code as `APPS_SCRIPT_WEB_APP_URL` in `index.html` (the same page is copied into the Android assets).
+- Replace `PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_EXEC_URL_HERE` with the deployed Apps Script Web App `/exec` URL before building the APK.
+- The full backend source remains in `apps-script/Code.gs`. Apps Script cannot execute merely by being placed inside an APK; Google requires it to be deployed as a Web App once. The spreadsheet/tabs can then be created by running `setupProject()` in Apps Script.
+- Never put eSewa/Khalti/Fonepay merchant secrets in the HTML or APK.
+
+
+## Automatic Google Sheets database setup
+1. Open `apps-script/Code.gs` in Google Apps Script.
+2. Deploy it as a Web App (execute as the deploying account; grant access as required).
+3. Put the deployed `/exec` URL once in `APPS_SCRIPT_WEB_APP_URL` in `index.html`. The same file is copied into the Android WebView assets.
+4. In the app, open Settings / Sync and tap **Sync now**.
+5. The app sends the `setup` action. `setupProject()` automatically creates the spreadsheet (if not already created) and creates/checks all required tabs and header rows: customers, rooms, roomRent, products, orders, payments, savings, withdrawals, loans, loanRepayments, transactions, users, notifications, settings.
+6. The spreadsheet URL is returned in the setup response. Later syncs reuse the same spreadsheet ID stored in Apps Script Script Properties; it does not create a new spreadsheet each time.
+
+Important: Google Apps Script still must be deployed once and authorized by the owner. The app cannot deploy Apps Script or grant Google permissions by itself. Never put payment gateway secrets in the HTML.
+
+
+## Admin self-service Apps Script creation and deployment (OAuth)
+The Settings page includes an Admin-only **Create & Deploy Apps Script** action. It uses the official Apps Script REST API with a user-authorized OAuth access token, creates a script project, uploads `apps-script/Code.gs` plus a web-app manifest, creates a version, deploys it, saves the returned `/exec` URL in this app's local storage, then runs spreadsheet setup/sync.
+
+**One-time Google Cloud prerequisites (cannot be skipped):**
+1. Create/select a Google Cloud project and enable **Google Apps Script API**.
+2. Configure the OAuth consent screen and add the Google account as a test user if the app is in Testing.
+3. Create an OAuth Client ID of type **Web application**. Add the exact app origin to Authorized JavaScript origins. For local `file://` use, OAuth origins are not supported; run the web app from an allowed HTTPS origin. For Android WebView, Google OAuth may block embedded user agents; use a system-browser OAuth flow / native Google Sign-In for production.
+4. Put the OAuth Web Client ID in the source constant `GOOGLE_OAUTH_CLIENT_ID` before building, or enter it in Admin Settings. Client ID is not a secret. Never put a Client Secret or service-account private key in the app.
+5. `apps-script/Code.gs` must be served from the app's same-origin `/apps-script/Code.gs` path for this prototype auto-deployer. If hosted as a standalone Android asset, the fetch path may not be available; host the project files on HTTPS or bundle Code.gs into the deployment client.
+
+Google account permission is requested at runtime. Apps Script deployment is owned by the Google account that authorizes it. The Web App manifest uses execute-as-deployer and access-anyone; review access/security before using real customer or financial data. This starter is not production-secure and does not replace backend authorization or financial compliance review.
+
+
+Auto-deploy note: the Apps Script source is embedded in the app's JavaScript bundle so Android WebView does not need to fetch a separate Code.gs file at runtime.
