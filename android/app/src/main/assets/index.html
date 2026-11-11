@@ -116,7 +116,7 @@ tbody tr:hover{background:#fff9ec}
   <p id="resetMessage" class="muted"></p>
 </div>
 <p class="muted">Initial admin: admin / ChangeMe123! — change immediately.</p></section>
-<div id="app" class="layout hidden"><aside id="nav"></aside><main class="main"><div id="banner" class="notice">First setup: Deploy Apps Script Web App and set its /exec URL once in the source code. Tap Sync now to automatically create the Google spreadsheet and all required tabs. Offline changes queue locally.</div><section id="view"></section></main></div>
+<div id="app" class="layout hidden"><aside id="nav"></aside><main class="main"><div id="banner" class="notice">पहिलो पटक Admin ले Google OAuth Client ID राखेर Create & Deploy Apps Script चलाउनुहोस्। Deploy भएपछि Sync now बाट Google Spreadsheet र आवश्यक Tabs स्वतः तयार हुन्छन्। Offline changes स्थानीय रूपमा सुरक्षित रहन्छन्।</div><section id="view"></section></main></div>
 <script>
 const API_KEY=''; // Optional shared key. Do not treat a key embedded in browser code as secure.
 const TABLES=['customers','rooms','roomRent','products','orders','payments','savings','withdrawals','loans','loanRepayments','transactions','users','notifications','settings'];
@@ -159,7 +159,7 @@ async function confirmReset(){
 function logout(){user=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('who').textContent='Not signed in'}
 const pages=[['dashboard','Dashboard'],['customers','Customers'],['rooms','Rooms'],['roomRent','Room Rent'],['products','Market Products'],['orders','Orders / Cart'],['payments','Payments & Bills'],['savings','Savings'],['withdrawals','Withdrawals'],['loans','Loans'],['loanRepayments','Loan Repayments'],['transactions','Transactions'],['users','Users'],['notifications','Gmail Notices'],['settings','Settings / Sync']];
 function buildNav(){$('nav').innerHTML=pages.map(([k,n])=>`<button id="nav_${k}" onclick="show('${k}')">${n}</button>`).join('')}
-function show(k){currentTable=k==='roomRent'?'roomRent':k;document.querySelectorAll('aside button').forEach(b=>b.classList.remove('active'));$('nav_'+k)?.classList.add('active');let fn=views[k]||genericView;$('view').innerHTML=fn();if(k==='products')renderProducts();if(k==='orders')renderCart();if(k==='settings'){$('apiUrl').value=apiUrl}}
+function show(k){currentTable=k==='roomRent'?'roomRent':k;document.querySelectorAll('aside button').forEach(b=>b.classList.remove('active'));$('nav_'+k)?.classList.add('active');let fn=views[k]||genericView;$('view').innerHTML=fn();if(k==='products')renderProducts();if(k==='orders')renderCart();}
 function field(id,label,type='text',placeholder=''){return `<div><label>${label}</label><input id="${id}" type="${type}" placeholder="${placeholder}"></div>`}
 function select(id,label,opts){return `<div><label>${label}</label><select id="${id}">${opts.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select></div>`}
 function form(title,fields,button,action){return `<div class="card"><h3>${title}</h3><div class="formgrid">${fields}</div><button style="margin-top:12px" onclick="${action}">${button}</button></div>`}
