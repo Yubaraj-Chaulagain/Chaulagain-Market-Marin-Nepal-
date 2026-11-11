@@ -56,6 +56,8 @@ function doPost(e){
     const body=JSON.parse((e.postData&&e.postData.contents)||'{}');
     const action=body.action, name=body.sheet;
     if(action==='ping') return json_({status:'OK',message:'Backend ready'});
+    if(action==='requestPasswordReset') return requestPasswordReset_(body);
+    if(action==='confirmPasswordReset') return confirmPasswordReset_(body);
     if(!TAB_HEADERS[name]) return json_({status:'ERROR',message:'Invalid sheet'});
     const sh=sheet_(name), headers=sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
     if(action==='upsert'){
@@ -79,6 +81,71 @@ function doPost(e){
   }catch(err){return json_({status:'ERROR',message:String(err)});}
   finally{try{lock.releaseLock();}catch(ignore){}}
 }
+
+/**
+ * Email OTP password reset.
+ * Deploy the Apps Script as a Web App and authorize MailApp.
+ * OTP is stored in Script Cache for 10 minutes and is never returned to the browser.
+ */
+function requestPasswordReset_(body){
+  const username=String(body.username||'').trim();
+  const email=String(body.email||'').trim().toLowerCase();
+  if(!username||!email) return json_({status:'ERROR',message:'Username and registered email are required'});
+  const sh=sheet_('users'), values=sh.getDataRange().getValues();
+  if(values.length<2) return json_({status:'OK',message:'If the account matches, an OTP has been sent'});
+  const headers=values[0].map(String);
+  const u=headers.indexOf('username'), em=headers.indexOf('useremail'), id=headers.indexOf('id');
+  if(u<0||em<0) return json_({status:'ERROR',message:'Users sheet needs username and useremail columns'});
+  const match=values.slice(1).findIndex(r=>String(r[u]).trim()===username && String(r[em]).trim().toLowerCase()===email);
+  // Use a generic success response to avoid revealing whether an account exists.
+  if(match<0) return json_({status:'OK',message:'If the account matches, an OTP has been sent'});
+  const cache=CacheService.getScriptCache();
+  const throttleKey='reset_throttle_'+username.toLowerCase();
+  if(cache.get(throttleKey)) return json_({status:'ERROR',message:'Please wait before requesting another OTP'});
+  const otp=String(Math.floor(100000+Math.random()*900000));
+  const tokenKey='reset_otp_'+username.toLowerCase();
+  const payload={otp:otp,email:email,row:match+2,attempts:0,created:Date.now()};
+  cache.put(tokenKey,JSON.stringify(payload),600);
+  cache.put(throttleKey,'1',60);
+  MailApp.sendEmail({
+    to:email,
+    subject:'Home & Market Manager Nepal - Password Reset OTP',
+    body:'Your password reset OTP is: '+otp+'\n\nThis OTP expires in 10 minutes. If you did not request this, ignore this email.'
+  });
+  return json_({status:'OK',message:'If the account matches, an OTP has been sent'});
+}
+function confirmPasswordReset_(body){
+  const username=String(body.username||'').trim();
+  const email=String(body.email||'').trim().toLowerCase();
+  const otp=String(body.otp||'').trim();
+  const newPassword=String(body.newPassword||'');
+  if(!username||!email||!otp||newPassword.length<8)
+    return json_({status:'ERROR',message:'Invalid reset details; password must be at least 8 characters'});
+  const cache=CacheService.getScriptCache();
+  const key='reset_otp_'+username.toLowerCase();
+  const raw=cache.get(key);
+  if(!raw) return json_({status:'ERROR',message:'OTP expired or not found. Request a new OTP.'});
+  const data=JSON.parse(raw);
+  if(data.email!==email) return json_({status:'ERROR',message:'OTP verification failed'});
+  data.attempts=(data.attempts||0)+1;
+  if(data.attempts>5){cache.remove(key);return json_({status:'ERROR',message:'Too many attempts. Request a new OTP.'});}
+  if(data.otp!==otp){cache.put(key,JSON.stringify(data),600);return json_({status:'ERROR',message:'Incorrect OTP'});}
+  const sh=sheet_('users');
+  const headers=sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0].map(String);
+  const userCol=headers.indexOf('username')+1, emailCol=headers.indexOf('useremail')+1, passCol=headers.indexOf('password')+1;
+  if(!userCol||!emailCol||!passCol) return json_({status:'ERROR',message:'Users sheet columns are incomplete'});
+  const rows=sh.getDataRange().getValues();
+  let foundRow=0;
+  for(let i=1;i<rows.length;i++){
+    if(String(rows[i][userCol-1]).trim()===username &&
+       String(rows[i][emailCol-1]).trim().toLowerCase()===email){foundRow=i+1;break;}
+  }
+  if(!foundRow) return json_({status:'ERROR',message:'Account not found'});
+  sh.getRange(foundRow,passCol).setValue(newPassword);
+  cache.remove(key);
+  return json_({status:'OK',message:'Password updated'});
+}
+
 function sendQueuedEmail_(row){
   const to=String(row.to||'').trim();if(!to||!row.subject)return;
   try{MailApp.sendEmail({to:to,subject:String(row.subject),body:String(row.message||'')});}
