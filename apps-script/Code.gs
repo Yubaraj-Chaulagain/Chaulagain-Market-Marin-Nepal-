@@ -34,6 +34,15 @@ function setupProject(){
     }
     sh.setFrozenRows(1);
   });
+  // Seed the documented first-login admin only when it does not already exist.
+  const users=ss.getSheetByName('users');
+  const userHeaders=users.getRange(1,1,1,users.getLastColumn()).getValues()[0].map(String);
+  const uCol=userHeaders.indexOf('username');
+  const hasAdmin=users.getLastRow()>1 && users.getRange(2,uCol+1,users.getLastRow()-1,1).getValues().some(r=>String(r[0]).trim().toLowerCase()==='admin');
+  if(!hasAdmin){
+    const admin={id:'admin',username:'admin',password:'ChangeMe123!',role:'Admin',useremail:'',status:'Approved',approvalStatus:'Approved'};
+    users.appendRow(userHeaders.map(h=>admin[h]===undefined?'':admin[h]));
+  }
   let settings=ss.getSheetByName('settings');
   if(settings.getLastRow()===1) settings.appendRow(['spreadsheetId',ss.getId()]);
   Logger.log('Database ready: '+ss.getUrl());
@@ -117,12 +126,18 @@ function requestPasswordReset_(body){
   const payload={otp:otp,email:email,row:match+2,attempts:0,created:Date.now()};
   cache.put(tokenKey,JSON.stringify(payload),600);
   cache.put(throttleKey,'1',60);
-  MailApp.sendEmail({
-    to:email,
-    subject:'Home & Market Manager Nepal - Password Reset OTP',
-    body:'Your password reset OTP is: '+otp+'\n\nThis OTP expires in 10 minutes. If you did not request this, ignore this email.'
-  });
-  return json_({status:'OK',message:'If the account matches, an OTP has been sent'});
+  try {
+    MailApp.sendEmail({
+      to:email,
+      subject:'Home & Market Manager Nepal - Password Reset OTP',
+      body:'Your password reset OTP is: '+otp+'\\n\\nThis OTP expires in 10 minutes. If you did not request this, ignore this email.'
+    });
+  } catch(mailErr) {
+    cache.remove(tokenKey);
+    cache.remove(throttleKey);
+    return json_({status:'ERROR',message:'Gmail OTP पठाउन सकेन। Apps Script मा MailApp permission authorize गर्नुहोस्: '+String(mailErr)});
+  }
+  return json_({status:'OK',message:'OTP sent'});
 }
 function confirmPasswordReset_(body){
   const username=String(body.username||'').trim();
