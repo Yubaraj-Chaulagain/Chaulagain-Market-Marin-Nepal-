@@ -35,8 +35,8 @@ function setupProject(){
   });
   let settings=ss.getSheetByName('settings');
   if(settings.getLastRow()===1) settings.appendRow(['spreadsheetId',ss.getId()]);
-  Logger.log('Database created: '+ss.getUrl());
-  return {status:'OK',spreadsheetId:ss.getId(),url:ss.getUrl(),tabs:Object.keys(TAB_HEADERS)};
+  Logger.log('Database ready: '+ss.getUrl());
+  return {status:'OK',message:'Spreadsheet and all tabs are ready',spreadsheetId:ss.getId(),url:ss.getUrl(),tabs:Object.keys(TAB_HEADERS)};
 }
 function doGet(e){
   try{
@@ -55,7 +55,13 @@ function doPost(e){
     lock.waitLock(20000);
     const body=JSON.parse((e.postData&&e.postData.contents)||'{}');
     const action=body.action, name=body.sheet;
-    if(action==='ping') return json_({status:'OK',message:'Backend ready'});
+    // First setup call creates the spreadsheet and every required tab automatically.
+    if(action==='setup' || action==='setupProject') return json_(setupProject());
+    if(action==='ping') {
+      const id=PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+      const database=id ? {status:'OK',spreadsheetId:id,url:SpreadsheetApp.openById(id).getUrl(),tabs:Object.keys(TAB_HEADERS)} : setupProject();
+      return json_({status:'OK',message:'Backend ready',database:database});
+    }
     if(action==='requestPasswordReset') return requestPasswordReset_(body);
     if(action==='confirmPasswordReset') return confirmPasswordReset_(body);
     if(!TAB_HEADERS[name]) return json_({status:'ERROR',message:'Invalid sheet'});
