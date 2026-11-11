@@ -33,29 +33,26 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Find Android SDK Manager
+      - name: Locate Android SDK Manager
         shell: bash
         run: |
           SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          echo "SDK Root: $SDK_ROOT"
 
           SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" \
             -type f -name sdkmanager 2>/dev/null | head -n 1)
 
           if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found"
+            echo "Android SDK Manager not found"
             exit 1
           fi
 
           echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
-          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
-          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
 
-      - name: Accept Android SDK Licenses
+      - name: Accept Android Licenses
         run: |
           yes | "$SDKMANAGER" --licenses || true
 
-      - name: Install Android SDK Packages
+      - name: Install Android SDK 35
         run: |
           "$SDKMANAGER" \
             "platforms;android-35" \
@@ -65,14 +62,16 @@ jobs:
         run: |
           gradle -p android assembleDebug --no-daemon
 
-      - name: Prepare APK
+      - name: Check APK
+        run: |
+          ls -lh android/app/build/outputs/apk/debug/
+
+      - name: Prepare Release APK
         run: |
           mkdir -p release
 
           cp android/app/build/outputs/apk/debug/app-debug.apk \
             release/Home-Market-Manager-Nepal.apk
-
-          ls -lh release/
 
       - name: Generate Release Version
         id: version
@@ -92,11 +91,14 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: Home Market Manager Nepal ${{ steps.version.outputs.tag }}
           body: |
-            Home & Market Manager Nepal
+            ## Home & Market Manager Nepal
 
             Android APK Release.
+
+            Download the APK from Assets.
           files: release/Home-Market-Manager-Nepal.apk
           make_latest: true
           fail_on_unmatched_files: true
+
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
