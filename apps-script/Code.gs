@@ -4,18 +4,19 @@
  */
 const TAB_HEADERS = {
   customers:['id','date','name','phone','email','address'],
-  rooms:['id','date','room','rent','customer','status'],
-  roomRent:['id','date','tenant','month','rentamt','duedate','status'],
+  rooms:['id','date','room','rent','customer','status','approvalStatus','rejectionReason'],
+  roomRent:['id','date','tenant','month','rentamt','duedate','status','approvalStatus','rejectionReason'],
   products:['id','date','pname','price','stock','unit','photo'],
-  orders:['id','date','buyer','items','total','paymode','status'],
+  orders:['id','date','buyer','items','cartItems','total','paymode','status','approvalStatus','rejectionReason'],
   payments:['id','date','payref','paycustomer','payamount','paymethod','paystatus'],
   savings:['id','date','scustomer','samount','snote','status'],
   withdrawals:['id','date','wcustomer','wamount','wnote','status'],
-  loans:['id','date','lcustomer','principal','rate','months','method','interestMethod','lstatus','outstanding'],
+  loans:['id','date','lcustomer','principal','rate','months','method','interestMethod','lstatus','outstanding','status','approvalStatus','rejectionReason'],
   loanRepayments:['id','loanid','lrpayer','lramount','lrdate','interest','principal'],
   transactions:['id','date','type','reference','amount','note'],
-  users:['id','username','password','role','useremail'],
+  users:['id','username','password','role','useremail','status','approvalStatus','rejectionReason'],
   notifications:['id','date','to','subject','message','status'],
+  approvals:['id','date','type','sheet','recordid','customer','amount','status','reason','token','email'],
   settings:['key','value']
 };
 function setupProject(){
@@ -40,6 +41,7 @@ function setupProject(){
 }
 function doGet(e){
   try{
+    if(e&&e.parameter&&e.parameter.action==='approval') return handleApprovalLink_(e.parameter);
     const name=(e&&e.parameter&&e.parameter.sheet)||'';
     if(!TAB_HEADERS[name]) return json_({status:'ERROR',message:'Invalid sheet'});
     const sh=sheet_(name), values=sh.getDataRange().getValues();
@@ -63,6 +65,8 @@ function doPost(e){
       return json_({status:'OK',message:'Backend ready',database:database});
     }
     if(action==='requestPasswordReset') return requestPasswordReset_(body);
+    if(action==='requestApproval') return requestApproval_(body);
+    if(action==='decideApproval') return decideApproval_(body.id,body.decision,body.reason||'');
     if(action==='confirmPasswordReset') return confirmPasswordReset_(body);
     if(!TAB_HEADERS[name]) return json_({status:'ERROR',message:'Invalid sheet'});
     const sh=sheet_(name), headers=sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
@@ -150,6 +154,79 @@ function confirmPasswordReset_(body){
   sh.getRange(foundRow,passCol).setValue(newPassword);
   cache.remove(key);
   return json_({status:'OK',message:'Password updated'});
+}
+
+
+function requestApproval_(body){
+  const sheetName=String(body.sheet||''), row=body.row||{};
+  const allowed=['loans','users','orders','rooms','roomRent'];
+  if(allowed.indexOf(sheetName)<0||!row.id) return json_({status:'ERROR',message:'Invalid approval request'});
+  const email=String(body.adminEmail||PropertiesService.getScriptProperties().getProperty('MAIN_ADMIN_EMAIL')||'').trim();
+  if(!email||email.indexOf('@')<1) return json_({status:'ERROR',message:'Main Admin Gmail is not configured. Set it in app Settings.'});
+  const sh=sheet_('approvals');
+  const existing=sh.getDataRange().getValues();
+  const h=existing[0].map(String), idCol=h.indexOf('recordid');
+  if(existing.slice(1).some(r=>String(r[idCol])===String(row.id))) return json_({status:'OK',message:'Approval already requested'});
+  const token=Utilities.getUuid()+Utilities.getUuid();
+  const type=({loans:'Loan',users:'User',orders:'Cart / Order',rooms:'Room',roomRent:'Room Rent'})[sheetName];
+  const customer=String(row.lcustomer||row.username||row.buyer||row.room||row.tenant||'');
+  const amount=Number(row.principal||row.total||row.rentamt||0);
+  const approval={id:Utilities.getUuid(),date:new Date(),type:type,sheet:sheetName,recordid:String(row.id),customer:customer,amount:amount,status:'Pending',reason:'',token:token,email:email};
+  sh.appendRow(h.map(k=>approval[k]===undefined?'':approval[k]));
+  const base=ScriptApp.getService().getUrl();
+  const yes=base+'?action=approval&token='+encodeURIComponent(token)+'&decision=Approved';
+  const no=base+'?action=approval&token='+encodeURIComponent(token)+'&decision=Rejected';
+  const subject='Approval required: '+type+' - '+customer;
+  const details='<p><b>Type:</b> '+type+'</p><p><b>Name:</b> '+customer+'</p><p><b>Amount:</b> NPR '+amount.toLocaleString('en-IN')+'</p><p><b>Record ID:</b> '+row.id+'</p>';
+  const html='<div style="font-family:Arial,sans-serif;max-width:600px"><h2>Home & Market Manager Nepal</h2><h3>New '+type+' approval required</h3>'+details+'<p><a href="'+yes+'" style="display:inline-block;padding:13px 25px;background:#16834a;color:white;text-decoration:none;border-radius:7px;font-weight:bold">YES — APPROVE</a> &nbsp; <a href="'+no+'" style="display:inline-block;padding:13px 25px;background:#b42318;color:white;text-decoration:none;border-radius:7px;font-weight:bold">NO — REJECT</a></p><p>Decision will be saved in Google Sheets.</p></div>';
+  MailApp.sendEmail({to:email,subject:subject,body:'Approval required: '+type+' '+customer+'\nApprove: '+yes+'\nReject: '+no,htmlBody:html});
+  return json_({status:'OK',message:'Approval email sent',approvalId:approval.id});
+}
+function handleApprovalLink_(params){
+  const token=String(params.token||''), decision=String(params.decision||'');
+  if(!token||['Approved','Rejected'].indexOf(decision)<0) return HtmlService.createHtmlOutput('Invalid approval link.');
+  const sh=sheet_('approvals'), values=sh.getDataRange().getValues(), headers=values[0].map(String);
+  const ti=headers.indexOf('token'), si=headers.indexOf('status'), ri=headers.indexOf('reason'), sheetCol=headers.indexOf('sheet'), idCol=headers.indexOf('recordid');
+  const i=values.findIndex((r,n)=>n>0&&String(r[ti])===token);
+  if(i<1) return HtmlService.createHtmlOutput('Approval link is invalid or already used.');
+  if(String(values[i][si])!=='Pending') return HtmlService.createHtmlOutput('This request has already been '+values[i][si]+'.');
+  sh.getRange(i+1,si+1).setValue(decision);
+  const reason=decision==='Rejected'?'Rejected by Main Admin through Gmail approval link':'';
+  if(ri>=0) sh.getRange(i+1,ri+1).setValue(reason);
+  const sourceName=String(values[i][sheetCol]), recordId=String(values[i][idCol]);
+  updateSourceApproval_(sourceName,recordId,decision,reason);
+  return HtmlService.createHtmlOutput('<div style="font-family:Arial;text-align:center;padding:35px"><h2>Home & Market Manager Nepal</h2><h3>Request '+decision+'</h3><p>The decision has been saved to Google Sheets.</p></div>');
+}
+function decideApproval_(id,decision,reason){
+  if(['Approved','Rejected'].indexOf(String(decision))<0) return json_({status:'ERROR',message:'Invalid decision'});
+  const sh=sheet_('approvals'), values=sh.getDataRange().getValues(), headers=values[0].map(String), idCol=headers.indexOf('id');
+  const i=values.findIndex((r,n)=>n>0&&String(r[idCol])===String(id));
+  if(i<1) return json_({status:'ERROR',message:'Approval not found'});
+  const statusCol=headers.indexOf('status'),reasonCol=headers.indexOf('reason');
+  sh.getRange(i+1,statusCol+1).setValue(decision);if(reasonCol>=0)sh.getRange(i+1,reasonCol+1).setValue(reason||'');
+  updateSourceApproval_(String(values[i][headers.indexOf('sheet')]),String(values[i][headers.indexOf('recordid')]),decision,reason||'');
+  return json_({status:'OK',message:'Decision saved'});
+}
+function updateSourceApproval_(name,id,decision,reason){
+  if(!TAB_HEADERS[name]) throw new Error('Invalid source sheet');
+  const sh=sheet_(name), data=sh.getDataRange().getValues(), h=data[0].map(String), idc=h.indexOf('id');
+  for(let i=1;i<data.length;i++) if(String(data[i][idc])===String(id)){
+    const sc=h.indexOf('status'), ac=h.indexOf('approvalStatus');
+    const previous=sc>=0?String(data[i][sc]):'';
+    if(name==='orders'&&decision==='Approved'&&previous!=='Approved'){
+      const cartCol=h.indexOf('cartItems');
+      if(cartCol>=0&&data[i][cartCol]){
+        const lines=JSON.parse(String(data[i][cartCol]));
+        const products=sheet_('products'), pd=products.getDataRange().getValues(), ph=pd[0].map(String), pid=ph.indexOf('id'), stock=ph.indexOf('stock');
+        lines.forEach(line=>{for(let j=1;j<pd.length;j++)if(String(pd[j][pid])===String(line.id)){const remaining=Math.max(0,Number(pd[j][stock]||0)-Number(line.qty||0));products.getRange(j+1,stock+1).setValue(remaining);break;}});
+      }
+    }
+    if(sc>=0)sh.getRange(i+1,sc+1).setValue(decision);
+    const lc=h.indexOf('lstatus');if(lc>=0)sh.getRange(i+1,lc+1).setValue(decision);
+    if(ac>=0)sh.getRange(i+1,ac+1).setValue(decision);
+    const rc=h.indexOf('rejectionReason');if(rc>=0)sh.getRange(i+1,rc+1).setValue(reason||'');
+    return;
+  }
 }
 
 function sendQueuedEmail_(row){
