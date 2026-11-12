@@ -1,0 +1,10 @@
+Home & Market Manager Nepal - workflow and financial protections
+
+Loan workflow: Customer -> Field Staff -> Manager -> Admin.
+Approve forwards to the next role. Manager rejection returns to Field Staff; Admin rejection returns to Manager; Field Staff rejection ends as NOT SUCCESSFUL and notifies the customer. Customer may edit and resubmit a terminal rejected request, creating a new approval cycle.
+
+Customer permissions: cannot delete any record; cannot edit existing financial records. Savings, withdrawals, repayments, payments, transactions and transfers are treated as immutable ledger entries (corrections should be recorded as new entries).
+
+Optional savings transfer: customers may transfer only from their own optional savings balance to another registered customer. Transfers are validated server-side and recorded in the transfers sheet.
+
+Setup: deploy apps-script/Code.gs as a new Apps Script Web App version. Ensure users sheet contains roles Customer, Field Staff, Manager and Admin, with correct customerId and useremail. Savings entries eligible for transfer must have savingType = Optional.

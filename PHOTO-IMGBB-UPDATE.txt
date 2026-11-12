@@ -1,0 +1,20 @@
+ImgBB photo storage update
+
+Included:
+- Admin-only ImgBB API key save action. The key is stored in Google Sheets settings tab as key=imgbbApiKey, value=<your API key>.
+- Apps Script uploads images to ImgBB server-side using UrlFetchApp; the API key is not sent back to the app during sync.
+- Customer, user, room and product forms accept image uploads (max 5 MB).
+- Image URLs are saved in the relevant Google Sheets row in the photo column.
+- Rows with a photo column show a Replace Photo action; replacing uploads a new ImgBB image and updates the photo URL in Sheets.
+- Customers, users, rooms, products and roomRent sheet headers gain a photo column automatically when setupProject() is run.
+
+Setup:
+1. In Google Sheets settings tab, headers must be key and value.
+2. In the app Settings / Sync as Admin, enter the ImgBB API key and Save ImgBB API Key. This writes key=imgbbApiKey into settings.
+3. Replace apps-script/Code.gs in Apps Script, save, then Deploy > Manage deployments > Edit > New version > Deploy.
+4. Use the updated website index.html and rebuild the APK so android/app/src/main/assets/index.html is included.
+5. Wait for the photo upload status to say Uploaded successfully before saving the form.
+
+Privacy:
+- The API key is not returned to the browser in sync responses, but spreadsheet editors can still see it in the settings tab. Limit spreadsheet sharing to trusted administrators.
+- ImgBB is an external image host. Images uploaded there are subject to ImgBB's terms and hosting policies.
